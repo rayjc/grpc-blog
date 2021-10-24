@@ -14,17 +14,56 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 var collection *mongo.Collection
 
-type server struct{}
-
 type blogItem struct {
-	Id       primitive.ObjectID `bson:"_id,omiempty"`
-	AuthorId string             `bson:"author_id"`
+	ID       primitive.ObjectID `bson:"_id,omiempty"`
+	AuthorID string             `bson:"author_id"`
 	Content  string             `bson:"content"`
 	Title    string             `bson:"title"`
+}
+
+type server struct{}
+
+func (*server) CreateBlog(ctx context.Context, req *blogpb.CreateBlogRequest) (*blogpb.CreateBlogResponse, error) {
+	fmt.Println("CreateBlog called.")
+	blog := req.GetBlog()
+	data := blogItem{
+		AuthorID: blog.GetAuthorId(),
+		Title:    blog.GetTitle(),
+		Content:  blog.GetContent(),
+	}
+
+	res, err := collection.InsertOne(context.Background(), data)
+	if err != nil {
+		return nil, status.Errorf(
+			codes.Internal,
+			fmt.Sprintf("Internal error: %v", err),
+		)
+	}
+
+	oid, ok := res.InsertedID.(primitive.ObjectID)
+	if !ok {
+		return nil, status.Errorf(
+			codes.Internal,
+			fmt.Sprintf("Cannot convert to ObjectID"),
+		)
+	}
+
+	newBlog := &blogpb.Blog{
+		Id:       oid.Hex(),
+		AuthorId: blog.GetAuthorId(),
+		Title:    blog.GetTitle(),
+		Content:  blog.GetContent(),
+	}
+	fmt.Printf("Blog created: %v\n", newBlog)
+	return &blogpb.CreateBlogResponse{
+		Blog: newBlog,
+	}, nil
 }
 
 func main() {
