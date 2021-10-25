@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rayjc/grpc-blog/blogpb"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -64,6 +65,69 @@ func (*server) CreateBlog(ctx context.Context, req *blogpb.CreateBlogRequest) (*
 	return &blogpb.CreateBlogResponse{
 		Blog: newBlog,
 	}, nil
+}
+
+func (*server) ReadBlog(ctx context.Context, req *blogpb.ReadBlogRequest) (*blogpb.ReadBlogResponse, error) {
+	fmt.Println("ReadBlog called.")
+
+	blogId := req.GetBlogId()
+	oid, err := primitive.ObjectIDFromHex(blogId)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "Cannot parse ID")
+	}
+
+	// create empty struct
+	data := &blogItem{}
+	filter := bson.D{{Key: "_id", Value: oid}}
+	// filter := bson.M{"_id", oid}
+	res := collection.FindOne(context.Background(), filter)
+	if err := res.Decode(data); err != nil {
+		return nil, status.Errorf(
+			codes.NotFound,
+			fmt.Sprintf("Cannot find blog: %v\n%v", blogId, err),
+		)
+	}
+
+	return &blogpb.ReadBlogResponse{Blog: &blogpb.Blog{
+		Id:       data.ID.Hex(),
+		AuthorId: data.AuthorID,
+		Content:  data.Content,
+		Title:    data.Title,
+	}}, nil
+}
+
+func (*server) UpdateBlog(ctx context.Context, req *blogpb.UpdateBlogRequest) (*blogpb.UpdateBlogResponse, error) {
+	fmt.Println("UpdateBlog called.")
+
+	blog := req.GetBlog()
+	oid, err := primitive.ObjectIDFromHex(blog.GetId())
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "Cannot parse ID")
+	}
+
+	filter := bson.D{{Key: "_id", Value: oid}}
+	update := bson.D{{
+		Key: "$set", Value: bson.D{
+			{Key: "AuthorID", Value: blog.GetAuthorId()},
+			{Key: "Title", Value: blog.GetTitle()},
+			{Key: "Content", Value: blog.GetContent()},
+		},
+	}}
+	res, err := collection.UpdateOne(context.Background(), filter, update)
+	if err != nil {
+		return nil, status.Errorf(
+			codes.Internal,
+			fmt.Sprintf("Cannot update blog: %v\n%v", blog.GetId(), err),
+		)
+	}
+	if res.MatchedCount != 0 {
+		return nil, status.Errorf(
+			codes.NotFound,
+			fmt.Sprintf("Cannot find blog: %v\n", blog.GetId()),
+		)
+	}
+
+	return &blogpb.UpdateBlogResponse{Blog: blog}, nil
 }
 
 func main() {
