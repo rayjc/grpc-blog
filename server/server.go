@@ -22,7 +22,7 @@ import (
 var collection *mongo.Collection
 
 type blogItem struct {
-	ID       primitive.ObjectID `bson:"_id,omiempty"`
+	ID       primitive.ObjectID `bson:"_id,omitempty"`
 	AuthorID string             `bson:"author_id"`
 	Content  string             `bson:"content"`
 	Title    string             `bson:"title"`
@@ -162,7 +162,7 @@ func (*server) DeleteBlog(ctx context.Context, req *blogpb.DeleteBlogRequest) (*
 func (*server) ListBlog(req *blogpb.ListBlogRequest, stream blogpb.BlogService_ListBlogServer) error {
 	fmt.Println("ListBlog called.")
 
-	cursor, err := collection.Find(context.Background(), nil)
+	cursor, err := collection.Find(context.Background(), bson.M{})
 	if err != nil {
 		return status.Errorf(
 			codes.Internal,
