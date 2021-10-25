@@ -120,7 +120,7 @@ func (*server) UpdateBlog(ctx context.Context, req *blogpb.UpdateBlogRequest) (*
 			fmt.Sprintf("Cannot update blog: %v\n%v", blog.GetId(), err),
 		)
 	}
-	if res.MatchedCount != 0 {
+	if res.MatchedCount == 0 {
 		return nil, status.Errorf(
 			codes.NotFound,
 			fmt.Sprintf("Cannot find blog: %v\n", blog.GetId()),
@@ -128,6 +128,35 @@ func (*server) UpdateBlog(ctx context.Context, req *blogpb.UpdateBlogRequest) (*
 	}
 
 	return &blogpb.UpdateBlogResponse{Blog: blog}, nil
+}
+
+func (*server) DeleteBlog(ctx context.Context, req *blogpb.DeleteBlogRequest) (*blogpb.DeleteBlogResponse, error) {
+	fmt.Println("DeleteBlog called.")
+
+	blogId := req.GetBlogId()
+	oid, err := primitive.ObjectIDFromHex(blogId)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "Cannot parse ID")
+	}
+
+	res, err := collection.DeleteOne(
+		context.Background(),
+		bson.D{{Key: "_id", Value: oid}},
+	)
+	if err != nil {
+		return nil, status.Errorf(
+			codes.Internal,
+			fmt.Sprintf("Cannot delete blog: %v\n%v", blogId, err),
+		)
+	}
+	if res.DeletedCount == 0 {
+		return nil, status.Errorf(
+			codes.NotFound,
+			fmt.Sprintf("Cannot find blog: %v\n", blogId),
+		)
+	}
+
+	return &blogpb.DeleteBlogResponse{BlogId: blogId}, nil
 }
 
 func main() {
