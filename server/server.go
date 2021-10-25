@@ -159,6 +159,38 @@ func (*server) DeleteBlog(ctx context.Context, req *blogpb.DeleteBlogRequest) (*
 	return &blogpb.DeleteBlogResponse{BlogId: blogId}, nil
 }
 
+func (*server) ListBlog(req *blogpb.ListBlogRequest, stream blogpb.BlogService_ListBlogServer) error {
+	fmt.Println("ListBlog called.")
+
+	cursor, err := collection.Find(context.Background(), nil)
+	if err != nil {
+		return status.Errorf(
+			codes.Internal,
+			fmt.Sprintf("Cannot get blogs: %v\n", err),
+		)
+	}
+	defer cursor.Close(context.Background())
+
+	for cursor.Next(context.Background()) {
+		data := &blogItem{}
+		if err := cursor.Decode(data); err != nil {
+			return status.Errorf(codes.Internal, "Error while decoding: %v", err)
+		}
+
+		stream.Send(&blogpb.ListBlogResponse{Blog: &blogpb.Blog{
+			Id:       data.ID.Hex(),
+			AuthorId: data.AuthorID,
+			Content:  data.Content,
+			Title:    data.Title,
+		}})
+	}
+	if err := cursor.Err(); err != nil {
+		return status.Errorf(codes.Internal, fmt.Sprintf("Internal error: %v", err))
+	}
+
+	return nil
+}
+
 func main() {
 	// log file name and line number upon crash
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
